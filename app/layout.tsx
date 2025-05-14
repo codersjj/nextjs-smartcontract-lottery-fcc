@@ -5,6 +5,7 @@ import { Providers } from "./providers"
 import { headers } from "next/headers"
 import { cookieToInitialState } from "wagmi"
 import { config } from "@/wagmi"
+import "@rainbow-me/rainbowkit/styles.css"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
