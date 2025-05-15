@@ -1,7 +1,7 @@
 "use client"
 
 import { cookieStorage, createConfig, createStorage, http } from "wagmi"
-import { mainnet, sepolia } from "wagmi/chains"
+import { mainnet, sepolia, hardhat } from "wagmi/chains"
 import { injected } from "wagmi/connectors"
 
 import { getDefaultConfig } from "@rainbow-me/rainbowkit"
@@ -22,10 +22,11 @@ import { getDefaultConfig } from "@rainbow-me/rainbowkit"
 export const config = getDefaultConfig({
   appName: "My RainbowKit App",
   projectId: "YOUR_PROJECT_ID",
-  chains: [mainnet, sepolia],
+  chains: [mainnet, sepolia, hardhat],
   transports: {
     [mainnet.id]: http(),
-    [sepolia.id]: http()
+    [sepolia.id]: http(),
+    [hardhat.id]: http()
   },
   ssr: true // If your dApp uses server side rendering (SSR)
 })
