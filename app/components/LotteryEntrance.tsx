@@ -5,12 +5,13 @@ import {
   useBalance,
   useChainId,
   useReadContract,
+  useReadContracts,
   useWriteContract
 } from "wagmi"
-import { getBalance } from "@wagmi/core"
+import { getBalance, waitForTransactionReceipt } from "@wagmi/core"
 import { raffleContractConfig } from "@/app/constants/contracts"
 import { useEffect, useState } from "react"
-import { formatEther, parseEther } from "viem"
+import { Address, formatEther, parseEther } from "viem"
 import { ToastContainer, toast } from "react-toastify"
 import { config } from "@/wagmi"
 
@@ -18,6 +19,8 @@ export default function LotteryEntrance() {
   const account = useAccount()
   const chainId = useChainId()
   const [balanceFormatted, setBalanceFormatted] = useState<string>("0")
+  const [numberOfPlayers, setNumberOfPlayers] = useState<bigint>(BigInt(0))
+  const [recentWinner, setRecentWinner] = useState<Address>("0x")
 
   useEffect(() => {
     if (account.status === "connected") {
@@ -44,6 +47,31 @@ export default function LotteryEntrance() {
       enabled: account.status === "connected"
     }
   })
+
+  const { data: raffleData, refetch: refetchRaffleData } = useReadContracts({
+    contracts: [
+      {
+        ...raffleContractConfig,
+        address,
+        functionName: "getNumberOfPlayers"
+      },
+      {
+        ...raffleContractConfig,
+        address,
+        functionName: "getRecentWinner"
+      }
+    ],
+    query: {
+      enabled: account.status === "connected"
+    }
+  })
+
+  console.log("🚀 ~ LotteryEntrance ~ raffleData:", raffleData)
+
+  useEffect(() => {
+    setNumberOfPlayers(raffleData?.[0]?.result as bigint)
+    setRecentWinner(raffleData?.[1]?.result as Address)
+  }, [raffleData])
 
   const entranceFeeFormatted = formatEther((entranceFee as bigint) ?? 0)
 
@@ -73,15 +101,35 @@ export default function LotteryEntrance() {
         value: entranceFee as bigint
       },
       {
-        onSuccess: async () => {
-          toast.success("Entered raffle successfully")
-          const balance = await getBalance(config, {
-            address
-          })
-          console.log("🚀 ~ handleEnterRaffle ~ balance:", balance)
-          setBalanceFormatted(formatBalance(balance?.value))
+        onSuccess: async (hash) => {
+          console.log("🚀 ~ onSuccess: ~ hash:", hash)
+          toast.success("Transaction submitted! Waiting for confirmation...")
+          try {
+            console.log("Waiting for transaction receipt...")
+
+            // Wait for transaction to be mined
+            const receipt = await waitForTransactionReceipt(config, {
+              hash,
+              confirmations: 1,
+              timeout: 30000 // 30 seconds timeout
+            })
+            console.log("Transaction receipt:", receipt)
+            toast.success("Entered raffle successfully")
+            const balance = await getBalance(config, {
+              address
+            })
+            console.log("🚀 ~ handleEnterRaffle ~ balance:", balance)
+            setBalanceFormatted(formatBalance(balance?.value))
+            await refetchRaffleData()
+          } catch (error: any) {
+            console.error("Transaction error:", error)
+            toast.error(
+              "Transaction failed: " + (error.shortMessage || error.message)
+            )
+          }
         },
         onError: (error: any) => {
+          console.error("Contract write error:", error)
           toast.error(error.shortMessage || error.message)
         }
       }
@@ -97,6 +145,8 @@ export default function LotteryEntrance() {
             Entrance Fee: {entranceFeeFormatted} ETH
           </p>
           <p className="my-1 text-lg">Raffle balance: {balanceFormatted} ETH</p>
+          <p className="my-1 text-lg">Number of players: {numberOfPlayers}</p>
+          <p className="my-1 text-lg">Recent winner: {recentWinner}</p>
           <button
             className="mt-2 bg-blue-500 text-white p-2 rounded-md cursor-pointer hover:bg-blue-600 hover:scale-105 transition-all duration-300"
             onClick={handleEnterRaffle}

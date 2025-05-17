@@ -1,6 +1,6 @@
-import ManualHeader from "@/app/ManualHeader"
-import Header from "@/app/Header"
-import LotteryEntrance from "@/app/LotteryEntrance"
+import ManualHeader from "@/app/components/ManualHeader"
+import Header from "@/app/components/Header"
+import LotteryEntrance from "@/app/components/LotteryEntrance"
 
 export default function Home() {
   return (
