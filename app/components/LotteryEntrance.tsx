@@ -6,11 +6,12 @@ import {
   useChainId,
   useReadContract,
   useReadContracts,
-  useWriteContract
+  useWriteContract,
+  useWatchContractEvent
 } from "wagmi"
 import { getBalance, waitForTransactionReceipt } from "@wagmi/core"
 import { raffleContractConfig } from "@/app/constants/contracts"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Address, formatEther, parseEther } from "viem"
 import { ToastContainer, toast } from "react-toastify"
 import { config } from "@/wagmi"
@@ -21,6 +22,8 @@ export default function LotteryEntrance() {
   const [balanceFormatted, setBalanceFormatted] = useState<string>("0")
   const [numberOfPlayers, setNumberOfPlayers] = useState<bigint>(BigInt(0))
   const [recentWinner, setRecentWinner] = useState<Address>("0x")
+  const [raffleState, setRaffleState] = useState<number>(0)
+  const [timestamp, setTimestamp] = useState<number>(0)
 
   useEffect(() => {
     if (account.status === "connected") {
@@ -59,6 +62,16 @@ export default function LotteryEntrance() {
         ...raffleContractConfig,
         address,
         functionName: "getRecentWinner"
+      },
+      {
+        ...raffleContractConfig,
+        address,
+        functionName: "getRaffleState"
+      },
+      {
+        ...raffleContractConfig,
+        address,
+        functionName: "getTimestamp"
       }
     ],
     query: {
@@ -71,6 +84,8 @@ export default function LotteryEntrance() {
   useEffect(() => {
     setNumberOfPlayers(raffleData?.[0]?.result as bigint)
     setRecentWinner(raffleData?.[1]?.result as Address)
+    setRaffleState(raffleData?.[2]?.result as number)
+    setTimestamp(raffleData?.[3]?.result as number)
   }, [raffleData])
 
   const entranceFeeFormatted = formatEther((entranceFee as bigint) ?? 0)
@@ -102,25 +117,16 @@ export default function LotteryEntrance() {
       },
       {
         onSuccess: async (hash) => {
-          console.log("🚀 ~ onSuccess: ~ hash:", hash)
           toast.success("Transaction submitted! Waiting for confirmation...")
           try {
-            console.log("Waiting for transaction receipt...")
-
             // Wait for transaction to be mined
             const receipt = await waitForTransactionReceipt(config, {
               hash,
               confirmations: 1,
               timeout: 30000 // 30 seconds timeout
             })
-            console.log("Transaction receipt:", receipt)
             toast.success("Entered raffle successfully")
-            const balance = await getBalance(config, {
-              address
-            })
-            console.log("🚀 ~ handleEnterRaffle ~ balance:", balance)
-            setBalanceFormatted(formatBalance(balance?.value))
-            await refetchRaffleData()
+            updateUIValues()
           } catch (error: any) {
             console.error("Transaction error:", error)
             toast.error(
@@ -136,6 +142,37 @@ export default function LotteryEntrance() {
     )
   }
 
+  const updateUIValues = useCallback(async () => {
+    console.log("updating UI values...")
+    if (address) {
+      const balance = await getBalance(config, {
+        address
+      })
+      console.log("🚀 ~ handleEnterRaffle ~ balance:", balance)
+      setBalanceFormatted(formatBalance(balance?.value))
+    }
+    await refetchRaffleData()
+  }, [address, refetchRaffleData])
+
+  const isFirstLoadRef = useRef(true)
+
+  useWatchContractEvent({
+    address,
+    abi: raffleContractConfig.abi,
+    eventName: "WinnerPicked",
+    onLogs: useCallback(
+      (logs: any) => {
+        if (!isFirstLoadRef.current) {
+          console.log("New logs!", logs)
+          toast.info("winner picked detected")
+          updateUIValues()
+        }
+        isFirstLoadRef.current = false
+      },
+      [updateUIValues]
+    )
+  })
+
   return (
     <div className="flex flex-col items-center justify-center">
       {address ? (
@@ -146,6 +183,8 @@ export default function LotteryEntrance() {
           </p>
           <p className="my-1 text-lg">Raffle balance: {balanceFormatted} ETH</p>
           <p className="my-1 text-lg">Number of players: {numberOfPlayers}</p>
+          <p className="my-1 text-lg">Raffle state: {raffleState}</p>
+          <p className="my-1 text-lg">timestamp: {timestamp}</p>
           <p className="my-1 text-lg">Recent winner: {recentWinner}</p>
           <button
             className="mt-2 bg-blue-500 text-white p-2 rounded-md cursor-pointer hover:bg-blue-600 hover:scale-105 transition-all duration-300"
