@@ -1,5 +1,8 @@
 export const raffleContractConfig = {
-  address: { "31337": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9" },
+  address: {
+    "31337": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "11155111": "0xE8B2dcbaE4164EeeCe15a4aD056b2f2A76EDeCB7"
+  },
   abi: [
     {
       type: "constructor",
