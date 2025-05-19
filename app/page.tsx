@@ -1,4 +1,3 @@
-import ManualHeader from "@/app/components/ManualHeader"
 import Header from "@/app/components/Header"
 import LotteryEntrance from "@/app/components/LotteryEntrance"
 

@@ -12,7 +12,7 @@ import {
 import { getBalance, waitForTransactionReceipt } from "@wagmi/core"
 import { raffleContractConfig } from "@/app/constants/contracts"
 import { useEffect, useState, useCallback, useRef } from "react"
-import { Address, formatEther, parseEther } from "viem"
+import { Address, formatEther } from "viem"
 import { ToastContainer, toast } from "react-toastify"
 import { config } from "@/wagmi"
 import LoadingSpinner from "./LoadingSpinner"
@@ -146,13 +146,14 @@ export default function LotteryEntrance() {
           toast.success("Transaction submitted! Waiting for confirmation...")
           try {
             // Wait for transaction to be mined
-            const receipt = await waitForTransactionReceipt(config, {
+            await waitForTransactionReceipt(config, {
               hash,
               confirmations: 1,
               timeout: 30000 // 30 seconds timeout
             })
             toast.success("Entered raffle successfully")
             updateUIValues()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (error: any) {
             console.error("Transaction error:", error)
             toast.error(
@@ -162,6 +163,7 @@ export default function LotteryEntrance() {
             setIsProcessing(false)
           }
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onError: (error: any) => {
           console.error("Contract write error:", error)
           toast.error(error.shortMessage || error.message)
@@ -190,6 +192,7 @@ export default function LotteryEntrance() {
     abi: raffleContractConfig.abi,
     eventName: "WinnerPicked",
     onLogs: useCallback(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (logs: any) => {
         console.log("🚀 ~ onLogs ~ logs:", logs)
         if (!isFirstLoadRef.current) {
