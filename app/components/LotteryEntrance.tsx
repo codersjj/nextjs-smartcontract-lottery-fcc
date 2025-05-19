@@ -15,10 +15,16 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { Address, formatEther, parseEther } from "viem"
 import { ToastContainer, toast } from "react-toastify"
 import { config } from "@/wagmi"
+import LoadingSpinner from "./LoadingSpinner"
 
 export default function LotteryEntrance() {
   const account = useAccount()
   const chainId = useChainId()
+  const [localChainId, setLocalChainId] = useState<number | undefined>(
+    undefined
+  )
+  const [address, setAddress] = useState<Address | undefined>(undefined)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [balanceFormatted, setBalanceFormatted] = useState<string>("0")
   const [numberOfPlayers, setNumberOfPlayers] = useState<bigint>(BigInt(0))
   const [recentWinner, setRecentWinner] = useState<Address>("0x")
@@ -26,21 +32,33 @@ export default function LotteryEntrance() {
   const [timestamp, setTimestamp] = useState<number>(0)
 
   useEffect(() => {
+    if (!localChainId) {
+      setAddress(undefined)
+      return
+    }
+    const address =
+      localChainId in raffleContractConfig.address
+        ? raffleContractConfig.address[
+            localChainId as unknown as keyof typeof raffleContractConfig.address
+          ]
+        : undefined
+    setAddress(address)
+  }, [localChainId])
+
+  useEffect(() => {
     if (account.status === "connected") {
-      console.log("account connected")
+      console.log("account connected, chainId:", chainId)
+      setLocalChainId(chainId)
+    } else if (account.status === "disconnected") {
+      console.log("account disconnected")
+      setLocalChainId(undefined)
+      setAddress(undefined)
     } else {
       console.log("account not connected, status:", account.status)
     }
-  }, [account.status])
+  }, [account.status, chainId])
 
   const { writeContract } = useWriteContract()
-
-  const address =
-    chainId in raffleContractConfig.address
-      ? raffleContractConfig.address[
-          chainId as unknown as keyof typeof raffleContractConfig.address
-        ]
-      : undefined
 
   const { data: entranceFee } = useReadContract({
     ...raffleContractConfig,
@@ -79,7 +97,10 @@ export default function LotteryEntrance() {
     }
   })
 
-  console.log("🚀 ~ LotteryEntrance ~ raffleData:", raffleData)
+  // console.log("🚀 ~ LotteryEntrance ~ raffleData:", raffleData)
+  if (raffleData?.[0]?.error) {
+    toast.error(raffleData?.[0]?.error.message)
+  }
 
   useEffect(() => {
     setNumberOfPlayers(raffleData?.[0]?.result as bigint)
@@ -103,11 +124,16 @@ export default function LotteryEntrance() {
   }, [balance])
 
   const handleEnterRaffle = () => {
+    if (isProcessing) {
+      return
+    }
+
     if (!address) {
       toast.error("No raffle address found")
       return
     }
 
+    setIsProcessing(true)
     writeContract(
       {
         address,
@@ -132,11 +158,14 @@ export default function LotteryEntrance() {
             toast.error(
               "Transaction failed: " + (error.shortMessage || error.message)
             )
+          } finally {
+            setIsProcessing(false)
           }
         },
         onError: (error: any) => {
           console.error("Contract write error:", error)
           toast.error(error.shortMessage || error.message)
+          setIsProcessing(false)
         }
       }
     )
@@ -148,7 +177,7 @@ export default function LotteryEntrance() {
       const balance = await getBalance(config, {
         address
       })
-      console.log("🚀 ~ handleEnterRaffle ~ balance:", balance)
+      // console.log("🚀 ~ handleEnterRaffle ~ balance:", balance)
       setBalanceFormatted(formatBalance(balance?.value))
     }
     await refetchRaffleData()
@@ -162,6 +191,7 @@ export default function LotteryEntrance() {
     eventName: "WinnerPicked",
     onLogs: useCallback(
       (logs: any) => {
+        console.log("🚀 ~ onLogs ~ logs:", logs)
         if (!isFirstLoadRef.current) {
           console.log("New logs!", logs)
           toast.info("winner picked detected")
@@ -173,24 +203,47 @@ export default function LotteryEntrance() {
     )
   })
 
+  useWatchContractEvent({
+    address,
+    abi: raffleContractConfig.abi,
+    eventName: "RequestedRaffleWinner",
+    onLogs(logs) {
+      console.log("🚀 ~ RequestedRaffleWinner ~ logs:", logs)
+      updateUIValues()
+    }
+  })
+
   return (
     <div className="flex flex-col items-center justify-center">
       {address ? (
         <>
-          <h1 className="my-4 text-2xl font-bold">Lottery Entrance</h1>
+          <h2 className="my-4 text-2xl font-bold">Hi from lottery entrance</h2>
           <p className="my-1 text-lg">
             Entrance Fee: {entranceFeeFormatted} ETH
           </p>
           <p className="my-1 text-lg">Raffle balance: {balanceFormatted} ETH</p>
           <p className="my-1 text-lg">Number of players: {numberOfPlayers}</p>
-          <p className="my-1 text-lg">Raffle state: {raffleState}</p>
+          <p className="my-1 text-lg">
+            Raffle state: {raffleState === 0 ? "OPEN" : "CALCULATING"}
+          </p>
           <p className="my-1 text-lg">timestamp: {timestamp}</p>
           <p className="my-1 text-lg">Recent winner: {recentWinner}</p>
           <button
-            className="mt-2 bg-blue-500 text-white p-2 rounded-md cursor-pointer hover:bg-blue-600 hover:scale-105 transition-all duration-300"
+            className="inline-flex items-center mt-2 px-4 py-2 bg-indigo-500
+              text-sm leading-6 font-semibold text-white p-2 rounded-md cursor-pointer
+            hover:bg-indigo-400 hover:scale-105 transition-all duration-150 ease-in-out
+              aria-disabled:opacity-80 aria-disabled:cursor-not-allowed"
             onClick={handleEnterRaffle}
+            aria-disabled={isProcessing}
           >
-            Enter Raffle
+            {isProcessing ? (
+              <>
+                <LoadingSpinner className="mr-3 -ml-1 size-5 text-white" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              "Enter Raffle"
+            )}
           </button>
           <ToastContainer />
         </>
